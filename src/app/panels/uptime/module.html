@@ -1,4 +1,4 @@
-<div ng-controller='uptime' ng-init="init()" ng-style="panel.style" >
+<div ng-controller='uptime' ng-init="init()" style="min-height:{{panel.height || row.height}}" >
 
     <uptime/>
     {{panel.uptime}}%
