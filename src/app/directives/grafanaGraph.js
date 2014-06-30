@@ -15,7 +15,7 @@ function (angular, $, kbn, moment, _) {
       restrict: 'A',
       template: '<div> </div>',
       link: function(scope, elem) {
-        var data, plot;
+        var data, plot, annotations;
         var hiddenData = {};
 
         scope.$on('refresh',function() {
@@ -35,8 +35,9 @@ function (angular, $, kbn, moment, _) {
         });
 
         // Receive render events
-        scope.$on('render',function(event, d) {
-          data = d || data;
+        scope.$on('render',function(event, renderData) {
+          data = renderData || data;
+          annotations = data.annotations;
           render_panel();
         });
 
@@ -206,13 +207,13 @@ function (angular, $, kbn, moment, _) {
         }
 
         function addAnnotations(options) {
-          if(!data.annotations || data.annotations.length === 0) {
+          if(!annotations || annotations.length === 0) {
             return;
           }
 
           var types = {};
 
-          _.each(data.annotations, function(event) {
+          _.each(annotations, function(event) {
             if (!types[event.annotation.name]) {
               types[event.annotation.name] = {
                 level: _.keys(types).length + 1,
@@ -235,7 +236,7 @@ function (angular, $, kbn, moment, _) {
 
           options.events = {
             levels: _.keys(types).length + 1,
-            data: data.annotations,
+            data: annotations,
             types: types
           };
         }
@@ -257,8 +258,8 @@ function (angular, $, kbn, moment, _) {
           var defaults = {
             position: 'left',
             show: scope.panel['y-axis'],
-            min: scope.panel.grid.min,
-            max: scope.panel.percentage && scope.panel.stack ? 100 : scope.panel.grid.max,
+            min: scope.panel.grid.leftMin,
+            max: scope.panel.percentage && scope.panel.stack ? 100 : scope.panel.grid.leftMax,
           };
 
           options.yaxes.push(defaults);
@@ -266,6 +267,8 @@ function (angular, $, kbn, moment, _) {
           if (_.findWhere(data, {yaxis: 2})) {
             var secondY = _.clone(defaults);
             secondY.position = 'right';
+            secondY.min = scope.panel.grid.rightMin;
+            secondY.max = scope.panel.percentage && scope.panel.stack ? 100 : scope.panel.grid.rightMax;
             options.yaxes.push(secondY);
             configureAxisMode(options.yaxes[1], scope.panel.y_formats[1]);
           }
@@ -313,7 +316,7 @@ function (angular, $, kbn, moment, _) {
             if (seriesInfo.alias) {
               group = '<small style="font-size:0.9em;">' +
                 '<i class="icon-circle" style="color:'+item.series.color+';"></i>' + ' ' +
-                (seriesInfo.alias || seriesInfo.query)+
+                (decodeURIComponent(seriesInfo.alias)) +
               '</small><br>';
             } else {
               group = kbn.query_color_dot(item.series.color, 15) + ' ';
@@ -350,8 +353,10 @@ function (angular, $, kbn, moment, _) {
           url += scope.panel.fill !== 0 ? ('&areaAlpha=' + (scope.panel.fill/10).toFixed(1)) : '';
           url += scope.panel.linewidth !== 0 ? '&lineWidth=' + scope.panel.linewidth : '';
           url += scope.panel.legend.show ? '&hideLegend=false' : '&hideLegend=true';
-          url += scope.panel.grid.min !== null ? '&yMin=' + scope.panel.grid.min : '';
-          url += scope.panel.grid.max !== null ? '&yMax=' + scope.panel.grid.max : '';
+          url += scope.panel.grid.leftMin !== null ? '&yMin=' + scope.panel.grid.leftMin : '';
+          url += scope.panel.grid.leftMax !== null ? '&yMax=' + scope.panel.grid.leftMax : '';
+          url += scope.panel.grid.rightMin !== null ? '&yMin=' + scope.panel.grid.rightMin : '';
+          url += scope.panel.grid.rightMax !== null ? '&yMax=' + scope.panel.grid.rightMax : '';
           url += scope.panel['x-axis'] ? '' : '&hideAxes=true';
           url += scope.panel['y-axis'] ? '' : '&hideYAxis=true';
 
@@ -387,11 +392,11 @@ function (angular, $, kbn, moment, _) {
         }
 
         elem.bind("plotselected", function (event, ranges) {
-          scope.$apply( function() {
-              scope.filter.setTime({
-                from  : moment.utc(ranges.xaxis.from).toDate(),
-                to    : moment.utc(ranges.xaxis.to).toDate(),
-              });
+          scope.$apply(function() {
+            scope.filter.setTime({
+              from  : moment.utc(ranges.xaxis.from).toDate(),
+              to    : moment.utc(ranges.xaxis.to).toDate(),
+            });
           });
         });
       }
