@@ -47,6 +47,7 @@ function (angular, app, $, _, kbn) {
 
     $scope.init = function() {
       //$scope.initPanel($scope);
+      $scope.initBaseController(this, $scope);
       $scope.datasources = datasourceSrv.listOptions();
       $scope.setDatasource($scope.panel.datasource);
     };
