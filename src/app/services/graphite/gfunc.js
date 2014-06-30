@@ -64,6 +64,11 @@ function (_) {
   });
 
   addFuncDef({
+    name: 'asPercent',
+    category: categories.Combine,
+  });
+
+  addFuncDef({
     name: 'diffSeries',
     category: categories.Combine,
   });
