@@ -437,13 +437,6 @@ function (_) {
   });
 
   addFuncDef({
-    name: 'movingAverage',
-    category: categories.Filter,
-    params: [{ name: "window size", type: "int" }],
-    defaultParams: [10]
-  });
-
-  addFuncDef({
     name: 'movingMedian',
     category: categories.Filter,
     params: [{ name: "windowSize", type: "select", options: ['1min', '5min', '15min', '30min', '1hour'] }],
