@@ -83,6 +83,7 @@ function (angular, app, $, _, kbn) {
             results[timestamp][i] = value;
           }
         }
+        //var most_recent_out_of_sla = 0;
         // now scan and generate uptime
         for (i in results) {
           var metric0 = parseFloat(results[i][0]);
