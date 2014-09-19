@@ -1,29 +1,22 @@
-/** @scratch /panels/5
- * include::panels/uptime.asciidoc[]
- */
-
-/** @scratch /panels/uptime/0
- * == uptime
- * Status: *Experimental*
- *
- * The uptime panel is used for displaying percent uptime, where uptime is defined as the time that a
- * given metric is below a given threshold.
- *
- */
 define([
   'angular',
   'app',
   'jquery',
-  'underscore',
+  'lodash',
   'kbn',
+  'moment',
+  'components/timeSeries',
+  'services/panelSrv',
+  'services/annotationsSrv',
+  'services/datasourceSrv',
 ],
-function (angular, app, $, _, kbn) {
+function (angular, app, $, _, kbn, moment, TimeSeries) {
   'use strict';
 
-  var module = angular.module('kibana.panels.text', []);
+  var module = angular.module('grafana.panels.uptime', []);
   app.useModule(module);
 
-  module.controller('uptime', function($scope, $rootScope, datasourceSrv, $timeout, annotationsSrv) {
+  module.controller('uptime', function($scope, $rootScope, panelSrv, annotationsSrv, timeSrv) {
     $scope.panelMeta = {
       description : "An text panel that displayed percent uptime, where "
       +"uptime is the percent of time that a given metric is below a given threshold"
@@ -36,6 +29,7 @@ function (angular, app, $, _, kbn) {
        *
        *
        */
+      datasource: null,
       target1    : "",
       threshold1 : "",
       target2    : "",
@@ -43,28 +37,46 @@ function (angular, app, $, _, kbn) {
       uptime: "",
       style: {},
     };
+
     _.defaults($scope.panel,_d);
 
-    $scope.init = function() {
-      //$scope.initPanel($scope);
-      $scope.initBaseController(this, $scope);
-      $scope.datasources = datasourceSrv.listOptions();
-      $scope.setDatasource($scope.panel.datasource);
-    };
+    $scope.updateTimeRange = function () {
+      $scope.range = timeSrv.timeRange();
+      $scope.rangeUnparsed = timeSrv.timeRange(false);
+      $scope.resolution = Math.ceil($(window).width() * ($scope.panel.span / 12));
+      $scope.interval = kbn.calculateInterval($scope.range, $scope.resolution, $scope.panel.interval);
+    }; 
 
-    $scope.setDatasource = function(datasource) {
-      $scope.panel.datasource = datasource;
-      $scope.datasource = datasourceSrv.get(datasource);
-      if (!$scope.datasource) {
-        $scope.panel.error = "Cannot find datasource " + datasource;
-        console.log("Cannot find datasource",datasource);
-        return;
-      }
-      $scope.get_data();
+    $scope.get_data = function() {
+        //console.log("xxx get_data");
+      $scope.updateTimeRange();
+      delete $scope.panel.error;
+      var metricsQuery = {
+          range: $scope.rangeUnparsed,
+          interval: $scope.interval,
+          targets: [ 
+              { target: $scope.panel.target1 },
+              { target: $scope.panel.target2 },
+          ],
+          format: "json",
+      };
+      return $scope.datasource.query(metricsQuery)
+        .then($scope.dataHandler)
+        .then(null, function(err) {
+            console.log("datasource.query error:" + err.message);
+            console.log(err.stack);
+            //$scope.panel.error = err.message || "Graphite HTTP Request Error";  
+            // we see this when one of the two graphs has no data points (e.g. no errors)
+            // This may be fixed by https://github.com/graphite-project/graphite-web/pull/646
+            // for now, let's try just fetching the first metric, see if that works
+            //metricsQuery.targets = [ { target: $scope.panel.target1 } ];
+            //return $scope.datasource.query(metricsQuery).then($scope.daeaHandler);
+          });
     };
 
     /** this is the return value from the graphite data fetch */
     $scope.dataHandler = function(data) {
+        //console.log("xxx dataHandler gotdata " + data);
         // compute uptime from response data
         var sla = [ $scope.panel.threshold1, $scope.panel.threshold2 ];
         var response = data.data;
@@ -106,86 +118,16 @@ function (angular, app, $, _, kbn) {
         uptime = parseFloat(Math.round(uptime * 100) / 100).toFixed(2);
         //console.log("xxx gotdata computed uptime",timesegments_out_of_sla,"/",timesegments_total,"=",uptime);
         $scope.panel.uptime = uptime;
+        $scope.render();
       };
-
-    $scope.updateTimeRange = function () {
-      $scope.range = this.filter.timeRange();
-      $scope.rangeUnparsed = this.filter.timeRange(false);
-      $scope.resolution = Math.ceil(($(window).width() * ($scope.panel.span / 12)) / 2);
-      $scope.interval = '10m';
-      if ($scope.range) {
-        $scope.interval = kbn.secondsToHms(
-          kbn.calculate_interval($scope.range.from, $scope.range.to, $scope.resolution, 0) / 1000
-        );
-      }
-    };
-
-    $scope.get_data = function() {
-      $scope.updateTimeRange();
-      delete $scope.panel.error;
-      var graphiteQuery = {
-        range: $scope.rangeUnparsed,
-        interval: $scope.interval,
-        targets: [ 
-            { target: $scope.panel.target1 },
-            { target: $scope.panel.target2 },
-          ],
-          format: "json",
-          datasource: $scope.datasource
-        };
-
-      return $scope.datasource.query($scope.filter, graphiteQuery)
-        .then($scope.dataHandler)
-        .then(null, function(err) {
-            console.log("datasource.query error:" + err.message);
-            console.log(err.stack);
-            //$scope.panel.error = err.message || "Graphite HTTP Request Error";  
-            // we see this when one of the two graphs has no data points (e.g. no errors)
-            // This may be fixed by https://github.com/graphite-project/graphite-web/pull/646
-            // for now, let's try just fetching the first metric, see if that works
-            graphiteQuery.targets = [ { target: $scope.panel.target1 } ]
-            return $scope.datasource.query(graphiteQuery).then($scope.dataHandler);
-          });
-
-    };
-
 
     $scope.render = function(data) {
       $scope.$emit('render', data);
     };
 
+    panelSrv.init($scope);
 
   });
-
-  module.directive('uptime', function() {
-    return {
-      restrict: 'E',
-      link: function(scope) {
-
-        scope.$on('render', function() {
-          render_panel();
-        });
-
-        scope.$on('refresh',function() {
-          scope.get_data();
-        });
-
-        function render_panel() {
-            // console.log("render_panel: ",scope.panel.metric,scope.panel.threshold,scope.panel.uptime);
-            // element.html("xxblah blah:" + scope.panel.metric + ":" + scope.panel.threshold + ":" + scope.panel.uptime);
-            // For whatever reason, this fixes chrome. I don't like it, I think
-            // it makes things slow?
-            //if(!scope.$$phase) { scope.$apply(); }
-        }
-
-        render_panel();
-      }
-    };
-  });
-
-
-
 
 });
-
 
