@@ -48,7 +48,7 @@ function (angular, app, $, _, kbn, moment, TimeSeries) {
     }; 
 
     $scope.get_data = function() {
-        //console.log("xxx get_data");
+      //console.log("xxx get_data");
       $scope.updateTimeRange();
       delete $scope.panel.error;
       var metricsQuery = {
@@ -158,7 +158,12 @@ function (angular, app, $, _, kbn, moment, TimeSeries) {
       $scope.$emit('render', data);
     };
 
-    panelSrv.init($scope);
+    $scope.init = function() {
+      panelSrv.init(this);
+      $scope.ready = false;
+      $scope.$on('refresh', $scope.get_data);
+      $scope.get_data();
+    };
 
   });
 
