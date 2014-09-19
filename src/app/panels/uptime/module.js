@@ -63,6 +63,7 @@ function (angular, app, $, _, kbn, moment, TimeSeries) {
       return $scope.datasource.query(metricsQuery)
         .then($scope.dataHandler)
         .then(null, function(err) {
+            $scope.panelMeta.loading = false;
             console.log("datasource.query error:" + err.message);
             console.log(err.stack);
             //$scope.panel.error = err.message || "Graphite HTTP Request Error";  
@@ -76,6 +77,7 @@ function (angular, app, $, _, kbn, moment, TimeSeries) {
 
     /** this is the return value from the graphite data fetch */
     $scope.dataHandler = function(data) {
+            $scope.panelMeta.loading = false;
         //console.log("xxx dataHandler gotdata " + data);
         // compute uptime from response data
         var sla = [ $scope.panel.threshold1, $scope.panel.threshold2 ];
@@ -95,8 +97,9 @@ function (angular, app, $, _, kbn, moment, TimeSeries) {
             results[timestamp][i] = value;
           }
         }
-        //var most_recent_out_of_sla = 0;
         // now scan and generate uptime
+        var most_recent_out_of_sla = 0;
+        var most_recent_ts = 0;
         for (i in results) {
           var metric0 = parseFloat(results[i][0]);
           var target1 = parseFloat(results[i][1]);
@@ -110,6 +113,12 @@ function (angular, app, $, _, kbn, moment, TimeSeries) {
             timesegments_out_of_sla += 1;
             out_of_sla = true;
           }
+          if (out_of_sla && i > most_recent_out_of_sla) {
+              most_recent_out_of_sla = i;
+          }
+          if (i > most_recent_ts ) {
+              most_recent_ts = i;
+          }
           //console.log("sla check",i,metric0,sla[0],eetric1,sla[1],out_of_sla);
           //console.log( results[i][0] + "=" + p95 + ":" + results[i][1] + "=" + error_percentage + ":" + out_of_sla);
         }
@@ -117,9 +126,33 @@ function (angular, app, $, _, kbn, moment, TimeSeries) {
         // round to 2 decimals
         uptime = parseFloat(Math.round(uptime * 100) / 100).toFixed(2);
         //console.log("xxx gotdata computed uptime",timesegments_out_of_sla,"/",timesegments_total,"=",uptime);
-        $scope.panel.uptime = uptime;
+        $scope.panel.uptime = uptime + "%";
+        if ( most_recent_out_of_sla > 0 ) {
+            $scope.panel.outage = "up " + $scope.toHHMMSS(most_recent_ts-most_recent_out_of_sla);
+        }
         $scope.render();
       };
+
+
+      // http://stackoverflow.com/questions/6312993/javascript-seconds-to-time-with-format-hhmmss
+      $scope.toHHMMSS = function (seconds) {
+          var days    = Math.floor(seconds / (60*60*24) )
+          seconds -= days * 60*60*24;
+          var hours   = Math.floor(seconds / (60*60) );
+          seconds -= hours * 60*60;
+          var minutes = Math.floor(seconds / 60 );
+          seconds -= minutes * 60;
+
+          if (hours   < 10) {hours   = "0"+hours;}
+          if (minutes < 10) {minutes = "0"+minutes;}
+          if (seconds < 10) {seconds = "0"+seconds;}
+          if (days > 0)  {
+              return days + "d " + hours+':'+minutes+':'+seconds;
+          } else {
+              return hours+':'+minutes+':'+seconds;
+          }
+      }
+
 
     $scope.render = function(data) {
       $scope.$emit('render', data);
