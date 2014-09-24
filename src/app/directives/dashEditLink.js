@@ -34,6 +34,7 @@ function (angular, $) {
 
           function hideScrollbars(value) {
             if (value) {
+              window.scrollTo(0,0);
               document.documentElement.style.overflow = 'hidden';  // firefox, chrome
               document.body.scroll = "no"; // ie only
             } else {
@@ -51,9 +52,12 @@ function (angular, $) {
           scope.onAppEvent('hide-dash-editor', hideEditorPane);
 
           scope.onAppEvent('show-dash-editor', function(evt, payload) {
-            hideEditorPane();
+            if (lastEditor === payload.src) {
+              hideEditorPane();
+              return;
+            }
 
-            if (lastEditor === payload.src) { return; }
+            hideEditorPane();
 
             scope.exitFullscreen();
 
