@@ -4,9 +4,17 @@ define([
   'kbn',
   'moment',
   'lodash',
-  './grafanaGraph.tooltip'
+  './graph.tooltip',
+  'jquery.flot',
+  'jquery.flot.events',
+  'jquery.flot.selection',
+  'jquery.flot.time',
+  'jquery.flot.stack',
+  'jquery.flot.stackpercent',
+  'jquery.flot.fillbelow',
+  'jquery.flot.crosshair'
 ],
-function (angular, $, kbn, moment, _, graphTooltip) {
+function (angular, $, kbn, moment, _, GraphTooltip) {
   'use strict';
 
   var module = angular.module('grafana.directives');
@@ -18,14 +26,33 @@ function (angular, $, kbn, moment, _, graphTooltip) {
       link: function(scope, elem) {
         var dashboard = scope.dashboard;
         var data, annotations;
+        var sortedSeries;
         var legendSideLastValue = null;
+        scope.crosshairEmiter = false;
 
-        scope.$on('refresh',function() {
-          scope.get_data();
+        scope.onAppEvent('setCrosshair', function(event, info) {
+          // do not need to to this if event is from this panel
+          if (info.scope === scope) {
+            return;
+          }
+
+          if(dashboard.sharedCrosshair) {
+            var plot = elem.data().plot;
+            if (plot) {
+              plot.setCrosshair({ x: info.pos.x, y: info.pos.y });
+            }
+          }
         });
 
-        scope.$on('toggleLegend', function() {
-          render_panel();
+        scope.onAppEvent('clearCrosshair', function() {
+          var plot = elem.data().plot;
+          if (plot) {
+            plot.clearCrosshair();
+          }
+        });
+
+        scope.$on('refresh', function() {
+          scope.get_data();
         });
 
         // Receive render events
@@ -46,10 +73,11 @@ function (angular, $, kbn, moment, _, graphTooltip) {
               height = parseInt(height.replace('px', ''), 10);
             }
 
-            height = height - 32; // subtract panel title bar
+            height -= 5; // padding
+            height -= scope.panel.title ? 24 : 9; // subtract panel title bar
 
             if (scope.panel.legend.show && !scope.panel.legend.rightSide) {
-              height = height - 21; // subtract one line legend
+              height = height - 26; // subtract one line legend
             }
 
             elem.css('height', height + 'px');
@@ -88,9 +116,14 @@ function (angular, $, kbn, moment, _, graphTooltip) {
             var series = data[i];
             var axis = yaxis[series.yaxis - 1];
             var formater = kbn.valueFormats[scope.panel.y_formats[series.yaxis - 1]];
-            series.updateLegendValues(formater, axis.tickDecimals, axis.scaledDecimals);
-          }
 
+            // legend and tooltip gets one more decimal precision
+            // than graph legend ticks
+            var tickDecimals = (axis.tickDecimals || -1) + 1;
+
+            series.updateLegendValues(formater, tickDecimals, axis.scaledDecimals + 2);
+            if(!scope.$$phase) { scope.$digest(); }
+          }
         }
 
         // Function for rendering panel
@@ -147,7 +180,7 @@ function (angular, $, kbn, moment, _, graphTooltip) {
               color: '#666'
             },
             crosshair: {
-              mode: panel.tooltip.shared ? "x" : null
+              mode: panel.tooltip.shared || dashboard.sharedCrosshair ? "x" : null
             }
           };
 
@@ -155,15 +188,16 @@ function (angular, $, kbn, moment, _, graphTooltip) {
             var series = data[i];
             series.applySeriesOverrides(panel.seriesOverrides);
             series.data = series.getFlotPairs(panel.nullPointMode, panel.y_formats);
+
             // if hidden remove points and disable stack
-            if (scope.hiddenSeries[series.info.alias]) {
+            if (scope.hiddenSeries[series.alias]) {
               series.data = [];
               series.stack = false;
             }
           }
 
-          if (data.length && data[0].info.timeStep) {
-            options.series.bars.barWidth = data[0].info.timeStep / 1.5;
+          if (data.length && data[0].stats.timeStep) {
+            options.series.bars.barWidth = data[0].stats.timeStep / 1.5;
           }
 
           addTimeAxis(options);
@@ -171,7 +205,7 @@ function (angular, $, kbn, moment, _, graphTooltip) {
           addAnnotations(options);
           configureAxisOptions(data, options);
 
-          var sortedSeries = _.sortBy(data, function(series) { return series.zindex; });
+          sortedSeries = _.sortBy(data, function(series) { return series.zindex; });
 
           function callPlot() {
             try {
@@ -184,6 +218,8 @@ function (angular, $, kbn, moment, _, graphTooltip) {
           }
 
           if (shouldDelayDraw(panel)) {
+            // temp fix for legends on the side, need to render twice to get dimensions right
+            callPlot();
             setTimeout(callPlot, 50);
             legendSideLastValue = panel.legend.rightSide;
           }
@@ -394,7 +430,9 @@ function (angular, $, kbn, moment, _, graphTooltip) {
           elem.html('<img src="' + url + '"></img>');
         }
 
-        graphTooltip.register(elem, dashboard, scope);
+        new GraphTooltip(elem, dashboard, scope, function() {
+          return sortedSeries;
+        });
 
         elem.bind("plotselected", function (event, ranges) {
           scope.$apply(function() {

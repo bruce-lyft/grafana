@@ -10,70 +10,35 @@ function (angular, _) {
 
     this.init = function($scope) {
       if (!$scope.panel.span) { $scope.panel.span = 12; }
-      if (!$scope.panel.title) { $scope.panel.title = 'No title'; }
-
-      var menu = [
-        {
-          text: 'Edit',
-          configModal: "app/partials/paneleditor.html",
-          condition: !$scope.panelMeta.fullscreenEdit
-        },
-        {
-          text: 'Edit',
-          click: "toggleFullscreen(true)",
-          condition: $scope.panelMeta.fullscreenEdit
-        },
-        {
-          text: "Fullscreen",
-          click: 'toggleFullscreen(false)',
-          condition: $scope.panelMeta.fullscreenView
-        },
-        {
-          text: 'Duplicate',
-          click: 'duplicatePanel(panel)',
-          condition: true
-        },
-        {
-          text: 'Span',
-          submenu: [
-            { text: '1', click: 'updateColumnSpan(1)' },
-            { text: '2', click: 'updateColumnSpan(2)' },
-            { text: '3', click: 'updateColumnSpan(3)' },
-            { text: '4', click: 'updateColumnSpan(4)' },
-            { text: '5', click: 'updateColumnSpan(5)' },
-            { text: '6', click: 'updateColumnSpan(6)' },
-            { text: '7', click: 'updateColumnSpan(7)' },
-            { text: '8', click: 'updateColumnSpan(8)' },
-            { text: '9', click: 'updateColumnSpan(9)' },
-            { text: '10', click: 'updateColumnSpan(10)' },
-            { text: '11', click: 'updateColumnSpan(11)' },
-            { text: '12', click: 'updateColumnSpan(12)' },
-          ],
-          condition: true
-        },
-        {
-          text: 'Advanced',
-          submenu: [
-            { text: 'Panel JSON', click: 'editPanelJson()' },
-          ],
-          condition: true
-        },
-        {
-          text: 'Remove',
-          click: 'remove_panel_from_row(row, panel)',
-          condition: true
-        }
-      ];
 
       $scope.inspector = {};
-      $scope.panelMeta.menu = _.where(menu, { condition: true });
+
+      $scope.editPanel = function() {
+        if ($scope.panelMeta.fullscreen) {
+          $scope.toggleFullscreen(true);
+        }
+        else {
+          $scope.appEvent('show-dash-editor', { src: 'app/partials/paneleditor.html', scope: $scope });
+        }
+      };
+
+      $scope.sharePanel = function() {
+        $scope.appEvent('show-modal', {
+          src: './app/partials/share-panel.html',
+          scope: $scope.$new()
+        });
+      };
 
       $scope.editPanelJson = function() {
-        $scope.emitAppEvent('show-json-editor', { object: $scope.panel, updateHandler: $scope.replacePanel });
+        $scope.appEvent('show-json-editor', { object: $scope.panel, updateHandler: $scope.replacePanel });
+      };
+
+      $scope.duplicatePanel = function() {
+        $scope.dashboard.duplicatePanel($scope.panel, $scope.row);
       };
 
       $scope.updateColumnSpan = function(span) {
-        $scope.panel.span = span;
+        $scope.panel.span = Math.min(Math.max($scope.panel.span + span, 1), 12);
 
         $timeout(function() {
           $scope.$emit('render');
@@ -104,6 +69,14 @@ function (angular, _) {
         $scope.get_data();
       };
 
+      $scope.toggleEditorHelp = function(index) {
+        if ($scope.editorHelpIndex === index) {
+          $scope.editorHelpIndex = null;
+          return;
+        }
+        $scope.editorHelpIndex = index;
+      };
+
       $scope.toggleFullscreen = function(edit) {
         $scope.dashboardViewState.update({ fullscreen: true, edit: edit, panelId: $scope.panel.id });
       };
@@ -115,9 +88,6 @@ function (angular, _) {
       // Post init phase
       $scope.fullscreen = false;
       $scope.editor = { index: 1 };
-      if ($scope.panelMeta.fullEditorTabs) {
-        $scope.editorTabs = _.pluck($scope.panelMeta.fullEditorTabs, 'title');
-      }
 
       $scope.datasources = datasourceSrv.getMetricSources();
       $scope.setDatasource($scope.panel.datasource);

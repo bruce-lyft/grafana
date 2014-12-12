@@ -33,8 +33,30 @@ function (angular, _) {
     };
 
     $scope.add = function() {
-      $scope.variables.push($scope.current);
-      $scope.update();
+      if ($scope.isValid()) {
+        $scope.variables.push($scope.current);
+        $scope.update();
+      }
+    };
+
+    $scope.isValid = function() {
+      if (!$scope.current.name) {
+        $scope.appEvent('alert-warning', ['Validation', 'Template variable requires a name']);
+        return false;
+      }
+
+      if (!$scope.current.name.match(/^\w+$/)) {
+        $scope.appEvent('alert-warning', ['Validation', 'Only word and digit characters are allowed in variable names']);
+        return false;
+      }
+
+      var sameName = _.findWhere($scope.variables, { name: $scope.current.name });
+      if (sameName && sameName !== $scope.current) {
+        $scope.appEvent('alert-warning', ['Validation', 'Variable with the same name already exists']);
+        return false;
+      }
+
+      return true;
     };
 
     $scope.runQuery = function() {
@@ -57,10 +79,12 @@ function (angular, _) {
     };
 
     $scope.update = function() {
-      $scope.runQuery().then(function() {
-        $scope.reset();
-        $scope.editor.index = 0;
-      });
+      if ($scope.isValid()) {
+        $scope.runQuery().then(function() {
+          $scope.reset();
+          $scope.editor.index = 0;
+        });
+      }
     };
 
     $scope.reset = function() {
@@ -71,6 +95,9 @@ function (angular, _) {
     $scope.typeChanged = function () {
       if ($scope.current.type === 'interval') {
         $scope.current.query = '1m,10m,30m,1h,6h,12h,1d,7d,14d,30d';
+      }
+      if ($scope.current.type === 'query') {
+        $scope.current.query = '';
       }
     };
 

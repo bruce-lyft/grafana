@@ -27,22 +27,30 @@ function (angular, $, kbn, _, moment) {
       this.timezone = data.timezone || 'browser';
       this.editable = data.editable === false ? false : true;
       this.hideControls = data.hideControls || false;
+      this.sharedCrosshair = data.sharedCrosshair || false;
       this.rows = data.rows || [];
       this.nav = data.nav || [];
       this.time = data.time || { from: 'now-6h', to: 'now' };
-      this.templating = data.templating || { list: [], enable: false };
-      this.annotations = data.annotations || { list: [], enable: false};
+      this.templating = this._ensureListExist(data.templating);
+      this.annotations = this._ensureListExist(data.annotations);
       this.refresh = data.refresh;
       this.version = data.version || 0;
+      this.hideAllLegends = data.hideAllLegends || false;
 
       if (this.nav.length === 0) {
         this.nav.push({ type: 'timepicker' });
       }
 
-      this.updateSchema(data);
+      this._updateSchema(data);
     }
 
     var p = DashboardModel.prototype;
+
+    p._ensureListExist = function (data) {
+      if (!data) { data = {}; }
+      if (!data.list) { data.list = []; }
+      return data;
+    };
 
     p.getNextPanelId = function() {
       var i, j, row, panel, max = 0;
@@ -84,6 +92,26 @@ function (angular, $, kbn, _, moment) {
       row.panels.push(panel);
     };
 
+    p.getPanelInfoById = function(panelId) {
+      var result = {};
+      _.each(this.rows, function(row) {
+        _.each(row.panels, function(panel, index) {
+          if (panel.id === panelId) {
+            result.panel = panel;
+            result.row = row;
+            result.index = index;
+            return;
+          }
+        });
+      });
+
+      if (!result.panel) {
+        return null;
+      }
+
+      return result;
+    };
+
     p.duplicatePanel = function(panel, row) {
       var rowIndex = _.indexOf(this.rows, row);
       var newPanel = angular.copy(panel);
@@ -115,7 +143,7 @@ function (angular, $, kbn, _, moment) {
       $rootScope.$broadcast('refresh');
     };
 
-    p.updateSchema = function(old) {
+    p._updateSchema = function(old) {
       var i, j, k;
       var oldVersion = this.version;
       var panelUpgrades = [];

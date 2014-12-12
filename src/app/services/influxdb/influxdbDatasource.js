@@ -44,7 +44,7 @@ function (angular, _, kbn, InfluxSeries, InfluxQueryBuilder) {
 
         // replace grafana variables
         query = query.replace('$timeFilter', timeFilter);
-        query = query.replace('$interval', (target.interval || options.interval));
+        query = query.replace(/\$interval/g, (target.interval || options.interval));
 
         // replace templated variables
         query = templateSrv.replace(query);
@@ -85,8 +85,13 @@ function (angular, _, kbn, InfluxSeries, InfluxQueryBuilder) {
       });
     };
 
-    InfluxDatasource.prototype.listSeries = function() {
-      return this._seriesQuery('list series').then(function(data) {
+    InfluxDatasource.prototype.listSeries = function(query) {
+      // wrap in regex
+      if (query && query.length > 0 && query[0] !== '/')  {
+        query = '/' + query + '/';
+      }
+
+      return this._seriesQuery('list series ' + query).then(function(data) {
         if (!data || data.length === 0) {
           return [];
         }
@@ -141,7 +146,6 @@ function (angular, _, kbn, InfluxSeries, InfluxQueryBuilder) {
     InfluxDatasource.prototype._seriesQuery = function(query) {
       return this._influxRequest('GET', '/series', {
         q: query,
-        time_precision: 's',
       });
     };
 
@@ -215,9 +219,9 @@ function (angular, _, kbn, InfluxSeries, InfluxQueryBuilder) {
       if (id === title) { return; }
 
       var self = this;
-      self._getDashboardInternal(id, isTemp).then(function(dashboard) {
+      self._getDashboardInternal(title, isTemp).then(function(dashboard) {
         if (dashboard !== null) {
-          self.deleteDashboard(id);
+          self.deleteDashboard(title);
         }
       });
     };
@@ -368,8 +372,9 @@ function (angular, _, kbn, InfluxSeries, InfluxQueryBuilder) {
     function getTimeFilter(options) {
       var from = getInfluxTime(options.range.from);
       var until = getInfluxTime(options.range.to);
+      var fromIsAbsolute = from[from.length-1] === 's';
 
-      if (until === 'now()') {
+      if (until === 'now()' && !fromIsAbsolute) {
         return 'time > now() - ' + from;
       }
 
